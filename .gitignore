@@ -9,7 +9,7 @@ env/
 
 # Data
 data/*.csv
-
+!data/creditcard_sample.csv
 # Streamlit
 .streamlit/
 

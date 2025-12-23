@@ -14,13 +14,13 @@ from sklearn.metrics import (
 
 # ------------------- PAGE CONFIG -------------------
 st.set_page_config(
-    page_title="Credit Card Fraud Detection Dashboard",
+    page_title="RiskVision",
     layout="wide"
 )
 
 # ------------------- PATHS -------------------
 MODEL_PATH = "models/"
-DATA_PATH = "data/creditcard.csv"
+DATA_PATH = "data/creditcard_sample.csv"
 
 # ------------------- SAFETY CHECKS -------------------
 assert os.path.exists(MODEL_PATH + "fraud_xgb_model.pkl"), "Model file missing"
@@ -54,32 +54,29 @@ selected_features = X_raw.columns[selector.support_]
 
 X_selected_df = pd.DataFrame(X_selected, columns=selected_features)
 
-scale_col = scaler.feature_names_in_[0]  # ALWAYS Amount
+scale_col = scaler.feature_names_in_[0]  # Amount
 X_selected_df[scale_col] = scaler.transform(
     X_selected_df[[scale_col]]
 )
 
 X_final = X_selected_df.values
 
-# ------------------- SIDEBAR -------------------
-st.sidebar.title("⚙️ Model Controls")
-
-threshold = st.sidebar.slider(
-    "Fraud Probability Threshold",
-    0.10, 0.90, 0.50, 0.05
-)
+# ------------------- FIXED THRESHOLD -------------------
+THRESHOLD = 0.50
 
 # ------------------- PREDICTIONS -------------------
 y_proba = model.predict_proba(X_final)[:, 1]
-y_pred = (y_proba >= threshold).astype(int)
+y_pred = (y_proba >= THRESHOLD).astype(int)
 
 # ------------------- TITLE -------------------
-st.title("💳 Credit Card Fraud Detection Dashboard")
+st.title("***RiskVision***")
+st.subheader("A Real-Time Fraud Risk Dashboard")
+
 
 st.markdown(
     """
     This dashboard enables **real-time fraud risk analysis**
-    with dynamic threshold tuning and transaction-level prediction.
+    with transaction-level prediction and performance insights.
     """
 )
 
@@ -94,7 +91,7 @@ c4.metric("ROC-AUC", f"{roc_auc_score(y, y_proba):.2f}")
 st.divider()
 
 # ------------------- INTERACTIVE CONFUSION MATRIX -------------------
-st.subheader("📊 Interactive Confusion Matrix")
+st.subheader("Interactive Confusion Matrix")
 
 cm = confusion_matrix(y, y_pred)
 
@@ -116,7 +113,7 @@ st.plotly_chart(fig, use_container_width=True)
 st.divider()
 
 # ------------------- FEATURE IMPORTANCE -------------------
-st.subheader("📈 Top Feature Importances")
+st.subheader("Top Feature Importances")
 
 importance_df = pd.DataFrame({
     "Feature": selected_features,
@@ -128,41 +125,32 @@ st.bar_chart(importance_df.head(10).set_index("Feature"))
 # ------------------- TOP FEATURES + AMOUNT -------------------
 top_features = importance_df.head(5)["Feature"].tolist()
 
-# Force include Amount
 if scale_col not in top_features:
     top_features.append(scale_col)
 
-# Remove duplicates (if any)
 top_features = list(dict.fromkeys(top_features))
-
-
 
 st.divider()
 
 # ------------------- USER INPUT TRANSACTION SIMULATOR -------------------
-st.subheader("🧪 Manual Transaction Fraud Prediction")
+st.subheader("Manual Transaction Fraud Prediction")
 
 st.markdown(
     """
-    Enter values for the **most influential features**. 
-    - Remaining features are auto-filled using dataset medians
+    Enter values for the **most influential features**.  
+    Remaining features are auto-filled using dataset medians.
     """
 )
 
-# --- UI-friendly ordering: Amount first ---
 ordered_features = [scale_col] + [f for f in top_features if f != scale_col]
 
 user_input = {}
-
-# Create two columns
 left, right = st.columns(2)
 
 for i, feature in enumerate(ordered_features):
     col = left if i % 2 == 0 else right
-
     with col:
         if feature == scale_col:
-            # Amount slider (business-friendly)
             user_input[feature] = st.slider(
                 "💰 Transaction Amount",
                 min_value=float(X_raw[feature].min()),
@@ -171,7 +159,6 @@ for i, feature in enumerate(ordered_features):
                 step=1.0
             )
         else:
-            # PCA features: compact numeric input
             user_input[feature] = st.number_input(
                 f"{feature} (PCA)",
                 value=float(X_raw[feature].median()),
@@ -179,12 +166,10 @@ for i, feature in enumerate(ordered_features):
             )
 
 # ------------------- AUTO-FILL REMAINING FEATURES -------------------
-full_input = {}
-for col in X_raw.columns:
-    if col in user_input:
-        full_input[col] = user_input[col]
-    else:
-        full_input[col] = float(X_raw[col].median())
+full_input = {
+    col: user_input.get(col, float(X_raw[col].median()))
+    for col in X_raw.columns
+}
 
 user_df = pd.DataFrame([full_input])
 
@@ -199,33 +184,21 @@ user_df_selected[scale_col] = scaler.transform(
 user_final = user_df_selected.values
 
 # ------------------- PREDICTION -------------------
-if st.button("🚨 Predict Fraud Risk"):
+if st.button("Predict Fraud Risk"):
     prob = model.predict_proba(user_final)[0][1]
 
     st.metric("Fraud Probability", f"{prob:.2%}")
 
-    if prob >= threshold:
-        st.error("🚨 High Fraud Risk Detected")
+    if prob >= THRESHOLD:
+        st.error("High Fraud Risk Detected")
     else:
-        st.success("✅ Transaction Appears Legitimate")
-
-# Fill remaining features with medians
-full_input = {}
-for col in X_raw.columns:
-    if col in user_input:
-        full_input[col] = user_input[col]
-    else:
-        full_input[col] = float(X_raw[col].median())
-
-user_df = pd.DataFrame([full_input])
-
-
+        st.success("Transaction Appears Legitimate")
 
 # ------------------- FOOTER -------------------
 st.markdown(
     """
     ---
     **XGBoost + RFECV + Streamlit Dashboard**  
-    Developed by Naga Niroop
+    Developed by **Naga Niroop**
     """
 )
