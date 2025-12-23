@@ -8,7 +8,7 @@ env/
 #models/*.pkl
 
 # Data
-#data/*.csv
+data/*.csv
 
 # Streamlit
 .streamlit/
